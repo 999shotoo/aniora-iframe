@@ -2,6 +2,21 @@ import { mapByAniListId, mapByMalId, normalizeMode } from "@/lib/allanime";
 import { getAnimeSlug } from "@/lib/animex/getId";
 import { NextRequest, NextResponse } from "next/server";
 
+const CORS_HEADERS: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept, Origin",
+  "Access-Control-Max-Age": "86400",
+};
+
+function corsJson(data: unknown, status = 200) {
+  return NextResponse.json(data, { status, headers: CORS_HEADERS });
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+}
+
 
 export async function GET(req: NextRequest) {
   try {
@@ -11,7 +26,7 @@ export async function GET(req: NextRequest) {
     const mode = normalizeMode(req.nextUrl.searchParams.get('mode') || 'sub');
 
     if (!id || !ep_id) {
-      return NextResponse.json({ success: false, error: 'Missing id or ep_id' }, { status: 400 });
+      return corsJson({ success: false, error: 'Missing id or ep_id' }, 400);
     }
 
     const animeId = await getAnimeSlug(id);
@@ -56,8 +71,8 @@ export async function GET(req: NextRequest) {
         },
       ]
     };
-    return NextResponse.json({ success: true, servers });
+    return corsJson({ success: true, servers });
   } catch (error) {
-    return NextResponse.json({ success: false, error: error || 'Failed to map input ID to AllAnime ID' }, { status: 500 });
+    return corsJson({ success: false, error: error || 'Failed to map input ID to AllAnime ID' }, 500);
   }
 }
