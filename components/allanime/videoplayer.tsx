@@ -8,7 +8,7 @@ interface VideoSource {
   url: string;
 }
 
-export default function VideoPlayer( { videoSources }: { videoSources: VideoSource[] }) {
+export default function VideoPlayer( { videoSources, poster }: { videoSources: VideoSource[], poster?: string } ) {
   const playerRef = useRef<HTMLDivElement | null>(null);
   const artplayerRef = useRef<Artplayer | null>(null);
 
@@ -36,7 +36,8 @@ export default function VideoPlayer( { videoSources }: { videoSources: VideoSour
       pip: true,
       hotkey: true,
       quality: qualities.length > 0 ? qualities : undefined,
-      autoplay: false,
+      autoplay: true,
+      poster: poster || '',
     });
 
     artplayerRef.current = art;

@@ -13,10 +13,10 @@ export default async function Page({
     params, searchParams
 }: {
     params: Promise<{ id: string }>
-    searchParams: Promise<{ ep: string, mode: string }>
+    searchParams: Promise<{ ep: string, mode: string, thumbnail?: string }>
 }) {
     const { id } = await params
-    const { ep, mode } = await searchParams
+    const { ep, mode, thumbnail } = await searchParams
     const getallanimeId = await mapByAniListId(id, mode)
     const allanimeId = getallanimeId?.data?.allanimeId
 
@@ -106,7 +106,7 @@ export default async function Page({
 
     return (
         <>
-            <VideoPlayer videoSources={sources} />
+            <VideoPlayer videoSources={sources} poster={thumbnail} />
         </>
     );
 }
