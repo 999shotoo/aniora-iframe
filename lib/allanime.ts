@@ -267,6 +267,16 @@ function b64urlToHex(b64url: any) {
   return Buffer.from(padded.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('hex');
 }
 
+function buildProxyUrl(targetUrl: string, refOrigin: string) {
+  const encodedUrl = encodeURIComponent(targetUrl);
+  const encodedRef = encodeURIComponent(refOrigin);
+  return `https://v0-kwik-cx-referer.onrender.com/api/proxy?url=${encodedUrl}&ref=${encodedRef}&origin=${encodedRef}`;
+}
+
+function isMp4UploadUrl(url: string) {
+  return /(^|\.)mp4upload\.com/i.test(url);
+}
+
 async function getFilemoonLinks(providerPath: string) {
   const allLinks: Array<{ resolution: any; url: any; provider: any; needsReferer?: boolean }> & {
     _subtitles?: Array<{ language: any; label: any; url: any }>;
@@ -312,7 +322,11 @@ async function getFilemoonLinks(providerPath: string) {
 
 async function getMp4UploadLinks(pageUrl: string) {
   try {
-    const response = await axios.get(pageUrl, {
+    const fetchUrl = isMp4UploadUrl(pageUrl)
+      ? buildProxyUrl(pageUrl, 'https://mp4upload.com')
+      : pageUrl;
+
+    const response = await axios.get(fetchUrl, {
       headers: { 'User-Agent': HTTP_HEADERS['User-Agent'], Referer: YOUTU_CHAN_REFERER },
       timeout: 25000,
       maxRedirects: 5,
@@ -320,7 +334,8 @@ async function getMp4UploadLinks(pageUrl: string) {
     const html = typeof response.data === 'string' ? response.data : '';
     const m = html.match(/(?:src|file):\s*"([^"]+\.mp4[^"]*)"/i);
     if (m) {
-      return [{ resolution: 'Mp4', url: m[1].replace(/\\u0026/g, '&').replace(/\\/g, ''), provider: 'Mp4' }];
+      const directUrl = m[1].replace(/\\u0026/g, '&').replace(/\\/g, '');
+      return [{ resolution: 'Mp4', url: isMp4UploadUrl(directUrl) ? buildProxyUrl(directUrl, 'https://mp4upload.com') : directUrl, provider: 'Mp4' }];
     }
   } catch (e) {
     console.log('[MP4UPLOAD] fetch failed:', e);
@@ -330,7 +345,7 @@ async function getMp4UploadLinks(pageUrl: string) {
 
 async function getProviderLinks(providerPath: string, sourceName: any) {
   if (providerPath.includes('tools.fast4speed.rsvp')) {
-    return [{ resolution: 'Yt', url: providerPath, provider: 'Yt-mp4', needsReferer: true }];
+    return [{ resolution: 'Yt', url: buildProxyUrl(providerPath, 'https://youtu-chan.com'), provider: 'Yt-mp4' }];
   }
   if (providerPath.includes('mp4upload.com')) {
     return getMp4UploadLinks(providerPath);
