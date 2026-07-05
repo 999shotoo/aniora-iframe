@@ -11,6 +11,14 @@ const ALLANIME_REFERER = 'https://allanime.day';
 const YOUTU_CHAN_REFERER = 'https://youtu-chan.com';
 const ALLANIME_EPISODE_QUERY_HASH = 'd405d0edd690624b66baba3068e0edc3ac90f1597d898a1ec8db4e5c43c00fec';
 
+
+const ANILIST_HEADERS = {
+  'Content-Type': 'application/json',
+  Accept: 'application/json',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0) Gecko/20100101 Firefox/150.0',
+  'Accept-Language': 'en-US,en;q=0.9',
+};
+
 const HTTP_HEADERS = {
   'Content-Type': 'application/json',
   Accept: 'application/json, text/plain, */*',
@@ -504,23 +512,33 @@ async function allanimeSearchByTitle(title: any, mode = 'sub') {
   return response.data?.data?.shows?.edges || [];
 }
 
+async function postAniListWithRetry(payload: { query: string; variables: { id: number; }; }, attempts = 3) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await axios.post(ANILIST_GRAPHQL_API, payload, {
+        headers: ANILIST_HEADERS,
+        timeout: 8000,
+      });
+    } catch (e) {
+      lastErr = e;
+      const status = e;
+      // Don't retry real GraphQL errors (400/404) — only transient/blocking ones
+      if (status !== 403 && status !== 429) break;
+      await new Promise((res) => setTimeout(res, 300 * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
+
 async function getAniListTitles(aniListId: any) {
   const parsedId = Number.parseInt(String(aniListId), 10);
   if (Number.isNaN(parsedId)) throw new Error('AniList ID must be a number');
 
-  const response = await axios.post(
-    ANILIST_GRAPHQL_API,
-    {
-      query: ANILIST_TITLE_QUERY,
-      variables: { id: parsedId },
-    },
-    {
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-    }
-  );
+  const response = await postAniListWithRetry({
+    query: ANILIST_TITLE_QUERY,
+    variables: { id: parsedId },
+  });
 
   const media = response.data?.data?.Media;
   if (!media) throw new Error('AniList media not found');
