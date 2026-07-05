@@ -510,8 +510,16 @@ async function getAniListTitles(aniListId: any) {
 
   const response = await axios.post(
     ANILIST_GRAPHQL_API,
-    { query: ANILIST_TITLE_QUERY, variables: { id: parsedId } },
-    { headers: { 'Content-Type': 'application/json', Accept: 'application/json' } }
+    {
+      query: ANILIST_TITLE_QUERY,
+      variables: { id: parsedId },
+    },
+    {
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+    }
   );
 
   const media = response.data?.data?.Media;
