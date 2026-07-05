@@ -12,7 +12,7 @@ const HEADERS = {
   "Sec-Fetch-Site": "none",
   "Sec-Fetch-User": "?1",
   "Cache-Control": "max-age=0",
-  Referer: "https://www.miruro.tv/",
+  Referer: "https://www.miruro.tv/", 
   Origin: "https://www.miruro.tv",
 };
 const MIRURO_PIPE_URL = "https://www.miruro.tv/api/secure/pipe";
@@ -67,7 +67,8 @@ function deepTranslate(obj: unknown): void {
 
 async function gunzip(bytes: Uint8Array): Promise<string> {
   const ds = new DecompressionStream("gzip");
-  const stream = new Blob([bytes]).stream().pipeThrough(ds);
+  const chunk = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  const stream = new Blob([chunk]).stream().pipeThrough(ds);
   const buf = await new Response(stream).arrayBuffer();
   return new TextDecoder().decode(buf);
 }

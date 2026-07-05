@@ -6,6 +6,11 @@ const HEADERS = {
 };
 const MIRURO_PIPE_URL = "https://www.miruro.tv/api/secure/pipe";
 
+export interface ProxyUrlOptions {
+  type?: "m3u8" | "vtt";
+  rotate?: boolean;
+}
+
 // ─── base64 / base64url helpers (Web API only) ─────────────────────
 
 function bytesToBase64Url(bytes: Uint8Array): string {
@@ -52,11 +57,20 @@ function deepTranslate(obj: unknown): void {
   }
 }
 
+export function makeProxyUrl(url: string, referer: string | null, options: ProxyUrlOptions = {}): string {
+  const params = new URLSearchParams({ url });
+  if (referer) params.set("referer", referer);
+  if (options.type) params.set("type", options.type);
+  if (options.rotate) params.set("rotate", "1");
+  return `/api/proxy?${params.toString()}`;
+}
+
 // ─── gzip decompression via Web Streams (Edge-supported) ───────────
 
 async function gunzip(bytes: Uint8Array): Promise<string> {
   const ds = new DecompressionStream("gzip");
-  const stream = new Blob([bytes]).stream().pipeThrough(ds);
+  const chunk = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  const stream = new Blob([chunk]).stream().pipeThrough(ds);
   const buf = await new Response(stream).arrayBuffer();
   return new TextDecoder().decode(buf);
 }
