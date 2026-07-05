@@ -33,7 +33,7 @@ export default async function AnimePage({ params, searchParams }: { params: { pr
                     {thumbnail &&
                         <Poster
                             className="vds-poster"
-                            src="https://files.vidstack.io/sprite-fight/poster.webp"
+                            src={thumbnail}
                             alt="Girl walks into campfire with gnomes surrounding her friend ready for their next meal!"
                         />
                     };
