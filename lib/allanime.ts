@@ -183,7 +183,9 @@ function b64urlToHex(b64url: any) {
 }
 
 async function getFilemoonLinks(providerPath: string) {
-  const allLinks = [] as Array<{ resolution: any; url: any; provider: any }> & {
+  const allLinks = [] as Array<{
+      needsReferer: any; resolution: any; url: any; provider: any 
+}> & {
     _subtitles?: Array<{ language: any; label: any; url: any }>;
   };
   const fetchUrl = providerPath.startsWith('http') ? providerPath : `https://${ALLANIME_BASE}${providerPath}`;
@@ -213,9 +215,9 @@ async function getFilemoonLinks(providerPath: string) {
         const m1 = part.match(/"url":"([^"]*)".*"height":(\d+)/);
         const m2 = part.match(/"height":(\d+).*"url":"([^"]*)"/);
         if (m1) {
-          allLinks.push({ resolution: m1[2], url: m1[1].replace(/\\u0026/g, '&').replace(/\\u003D/g, '='), provider: 'Fm-mp4' });
+          allLinks.push({ resolution: m1[2], url: m1[1].replace(/\\u0026/g, '&').replace(/\\u003D/g, '='), provider: 'Fm-mp4', needsReferer: false });
         } else if (m2) {
-          allLinks.push({ resolution: m2[1], url: m2[2].replace(/\\u0026/g, '&').replace(/\\u003D/g, '='), provider: 'Fm-mp4' });
+          allLinks.push({ resolution: m2[1], url: m2[2].replace(/\\u0026/g, '&').replace(/\\u003D/g, '='), provider: 'Fm-mp4', needsReferer: false });
         }
       }
     }
