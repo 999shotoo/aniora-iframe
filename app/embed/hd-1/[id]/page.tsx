@@ -1,86 +1,120 @@
-import { decodeProviderId, getFilemoonLinks, getProviderLinks, parseSourceLines, requestAllanimeEpisodeSources } from "@/lib/allanime";
+import { decodeProviderId, getFilemoonLinks, getProviderLinks, mapByAniListId, parseSourceLines, requestAllanimeEpisodeSources } from "@/lib/allanime";
 
+function sourceNameKey(value: string) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, '-')
+    .replace(/[^a-z0-9-]/g, '');
+}
 
 export default async function Page({
     params, searchParams
 }: {
     params: Promise<{ id: string }>
-    searchParams: { ep: string, mode: string }
+    searchParams: Promise<{ ep: string, mode: string }>
 }) {
     const { id } = await params
     const { ep, mode } = await searchParams
+    const getallanimeId = await mapByAniListId(id, mode)
+    const allanimeId = getallanimeId?.data?.allanimeId
 
-    const apiData = await requestAllanimeEpisodeSources(id, mode, ep);
+   
+
+    const apiData = await requestAllanimeEpisodeSources(allanimeId, mode, ep);
+    console.log('[SOURCE] Raw API response keys:', Object.keys(apiData || {}));
+
+    // Check for API-level errors (e.g. NEED_CAPTCHA)
+    if (apiData?.errors?.length > 0) {
+      const msg = apiData.errors.map((e: { message: any }) => e.message).join(', ');
+      console.log('[SOURCE] API errors:', msg);
+      console.error('[SOURCE] API errors:', msg);
+    }
+
+    // Parse source lines using the robust multi-blob parser
     const respLines = parseSourceLines(apiData);
-    const providerDefs = [
-        { name: 'Default', filemoon: false },
-        { name: 'Mp4', filemoon: false },
-        { name: 'Yt-mp4', filemoon: false },
-        // { name: 'S-mp4',    filemoon: false },
-        // { name: 'Fm-mp4',   filemoon: true  },
-        // { name: 'Luf-Mp4',  filemoon: false },
-    ];
+    console.log('[SOURCE] Parsed source lines:', respLines.length, respLines.map((r) => r.sourceName));
+
+    // Also expose raw provider list for consumers that want to pick themselves
+    const providers = respLines.map((r) => ({
+      name: r.sourceName,
+      resolvedPath: r.directUrl || (r.hex ? decodeProviderId(r.hex) : null),
+      filemoon: r.sourceName?.toLowerCase().includes('filemoon'),
+    }));
+
 
     // Fetch all providers in parallel
     const allLinks = [];
     const allSubtitles = [];
 
     const providerResults = await Promise.all(
-        providerDefs.map(async (prov) => {
-            const entry = respLines.find((r) => r.sourceName === prov.name);
-            if (!entry) return { links: [], subtitles: [] };
+      providers.map(async (prov) => {
+        const entry = respLines.find((r) => sourceNameKey(r.sourceName) === sourceNameKey(prov.name));
+        if (!entry) return { links: [], subtitles: [] };
 
-            const resolvedPath = entry.directUrl || (entry.hex ? decodeProviderId(entry.hex) : null);
-            if (!resolvedPath) return { links: [], subtitles: [] };
+        const resolvedPath = entry.directUrl || (entry.hex ? decodeProviderId(entry.hex) : null);
+        if (!resolvedPath) return { links: [], subtitles: [] };
 
-            console.log(`[SOURCE] Fetching provider "${prov.name}" -> ${resolvedPath.substring(0, 80)}`);
+        console.log(`[SOURCE] Fetching provider "${prov.name}" -> ${resolvedPath.substring(0, 80)}`);
 
-            const links = prov.filemoon
-                ? await getFilemoonLinks(resolvedPath)
-                : await getProviderLinks(resolvedPath, prov.name);
+        const links = prov.filemoon
+          ? await getFilemoonLinks(resolvedPath)
+          : await getProviderLinks(resolvedPath, prov.name);
 
-            const subtitles = (links as any)?._subtitles ?? [];
-            return { links, subtitles };
-        })
+        // links may be a plain array or an array with an attached _subtitles property.
+        // Use a safe any-cast to access _subtitles without TypeScript error.
+        return { links, subtitles: ((links as any)?._subtitles) || [] };
+      })
     );
 
     for (const r of providerResults) {
-        allLinks.push(...r.links);
-        allSubtitles.push(...r.subtitles);
+      allLinks.push(...r.links);
+      allSubtitles.push(...r.subtitles);
     }
 
     // Sort: non-referer first, then by resolution descending
     allLinks.sort((a, b) => {
-        const aF = (a as { needsReferer?: boolean }).needsReferer ? 1 : 0;
-        const bF = (b as { needsReferer?: boolean }).needsReferer ? 1 : 0;
-        if (aF !== bF) return aF - bF;
-        return (parseInt(b.resolution) || 0) - (parseInt(a.resolution) || 0);
+      const aF = a.needsReferer ? 1 : 0;
+      const bF = b.needsReferer ? 1 : 0;
+      if (aF !== bF) return aF - bF;
+      return (parseInt(b.resolution) || 0) - (parseInt(a.resolution) || 0);
     });
 
     // Dedup
     const seen = new Set();
     const sources = allLinks.filter((item) => {
-        const key = `${item.provider}|${item.resolution}|${item.url}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
+      const key = `${item.provider}|${item.resolution}|${item.url}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
     });
 
-    // Also expose raw provider list for consumers that want to pick themselves
-    const providers = respLines.map((r) => ({
-        name: r.sourceName,
-        resolvedPath: r.directUrl || (r.hex ? decodeProviderId(r.hex) : null),
-    }));
+    const episodeString = apiData?.data?.episode?.episodeString || String(ep);
 
-    const episodeString = apiData?.data?.episode?.episodeString || ep;
-
-    console.log(sources)
+    console.log({
+      success: true,
+      data: {
+        allanimeId: allanimeId,
+        mode,
+        episode: episodeString,
+        providers,
+        sources,
+        subtitles: allSubtitles,
+      },
+    });
 
     return (
         <>
             <h1>hey {id}</h1>
             <p>Episode: {ep}</p>
             <p>Mode: {mode}</p>
+            <ul>
+                {sources.map((source, index) => (
+                    <li key={index}>
+                        <strong>{source.provider}</strong> - {source.resolution} - <a href={source.url} target="_blank" rel="noopener noreferrer">Link</a> {source.needsReferer ? '(needs referer)' : ''}
+                    </li>
+                ))}
+            </ul>
         </>
     );
 }

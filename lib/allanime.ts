@@ -77,7 +77,7 @@ function decrypt(blob: any) {
 
 // ─── Provider ID decoder ──────────────────────────────────────────────────────
 
-const decodeMapping = {
+const decodeMapping: Record<string, string> = {
   '79': 'A', '7a': 'B', '7b': 'C', '7c': 'D', '7d': 'E', '7e': 'F', '7f': 'G',
   '70': 'H', '71': 'I', '72': 'J', '73': 'K', '74': 'L', '75': 'M', '76': 'N', '77': 'O',
   '68': 'P', '69': 'Q', '6a': 'R', '6b': 'S', '6c': 'T', '6d': 'U', '6e': 'V', '6f': 'W',
@@ -91,12 +91,12 @@ const decodeMapping = {
   '15': '-', '16': '.', '67': '_', '46': '~', '02': ':', '17': '/', '07': '?',
   '1b': '#', '63': '[', '65': ']', '78': '@', '19': '!', '1c': '$', '1e': '&',
   '10': '(', '11': ')', '12': '*', '13': '+', '14': ',', '03': ';', '05': '=', '1d': '%',
-} as const;
+};
 
 function decodeProviderId(hex: string) {
   let result = '';
   for (let i = 0; i < hex.length; i += 2) {
-    result += decodeMapping[hex.substring(i, i + 2) as keyof typeof decodeMapping] || '';
+    result += decodeMapping[hex.substring(i, i + 2)] || '';
   }
   return result.replace('/clock', '/clock.json');
 }
@@ -112,8 +112,90 @@ function unescapeSource(str: string) {
     .replace(/\\/g, '');
 }
 
+function normalizeSourceName(sourceName: string, sourceUrl: string) {
+  const name = String(sourceName || '').trim();
+  const url = String(sourceUrl || '').trim();
+
+  if (/fast4speed|youtu/i.test(url) || /^yt(?:[-_\s]?mp4)?$/i.test(name)) {
+    return 'Yt-mp4';
+  }
+
+  if (/mp4upload/i.test(url) || /^mp4$/i.test(name)) {
+    return 'Mp4';
+  }
+
+  return name;
+}
+
+function sourceNameKey(value: string) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, '-')
+    .replace(/[^a-z0-9-]/g, '');
+}
+
+function extractSourcePairs(text: string) {
+  const pairs: Array<{ sourceName: string; sourceUrl: string }> = [];
+  const sourceUrlFirst = /"sourceUrl":"([^"]*)".*?"sourceName":"([^"]*)"/g;
+  const sourceNameFirst = /"sourceName":"([^"]*)".*?"sourceUrl":"([^"]*)"/g;
+
+  for (const match of text.matchAll(sourceUrlFirst)) {
+    pairs.push({ sourceUrl: match[1], sourceName: match[2] });
+  }
+
+  for (const match of text.matchAll(sourceNameFirst)) {
+    pairs.push({ sourceUrl: match[2], sourceName: match[1] });
+  }
+
+  return pairs;
+}
+
+function collectStructuredSources(node: any, respLines: Array<{ sourceName: string; hex?: string; directUrl?: string }>, seen: Set<string>) {
+  if (!node) return;
+
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      collectStructuredSources(item, respLines, seen);
+    }
+    return;
+  }
+
+  if (typeof node !== 'object') return;
+
+  const sourceUrl = typeof node.sourceUrl === 'string' ? node.sourceUrl : typeof node.url === 'string' ? node.url : null;
+  const sourceName = typeof node.sourceName === 'string'
+    ? node.sourceName
+    : typeof node.provider === 'string'
+      ? node.provider
+      : typeof node.resolutionStr === 'string'
+        ? node.resolutionStr
+        : null;
+
+  if (sourceUrl && sourceName) {
+    const cleanedUrl = unescapeSource(sourceUrl);
+    const normalizedName = normalizeSourceName(sourceName, cleanedUrl);
+    const key = `${normalizedName}|${cleanedUrl}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      if (cleanedUrl.startsWith('--')) {
+        respLines.push({ sourceName: normalizedName, hex: cleanedUrl.substring(2) });
+      } else if (cleanedUrl.startsWith('http') || cleanedUrl.startsWith('/')) {
+        respLines.push({ sourceName: normalizedName, directUrl: cleanedUrl });
+      } else {
+        respLines.push({ sourceName: normalizedName, hex: cleanedUrl });
+      }
+    }
+  }
+
+  for (const value of Object.values(node)) {
+    collectStructuredSources(value, respLines, seen);
+  }
+}
+
 function parseSourceLines(apiData: { data: { _m: string | any[]; tobeparsed: any; episode: { sourceUrls: any; }; }; tobeparsed: any; }) {
-  const respLines = [];
+  const respLines: Array<{ sourceName: string; hex?: string; directUrl?: string }> = [];
+  const seen = new Set<string>();
 
   const extractFromBlob = (blob: string | any[]) => {
     if (!blob || blob.length < 50) return;
@@ -122,10 +204,10 @@ function parseSourceLines(apiData: { data: { _m: string | any[]; tobeparsed: any
 
     const parts = plain.replace(/[{}]/g, '\n').split('\n');
     for (const part of parts) {
-      const m = part.match(/"sourceUrl":"([^"]*)".*"sourceName":"([^"]*)"/);
-      if (m) {
-        let sourceUrl = unescapeSource(m[1]);
-        const sourceName = m[2];
+      const pairs = extractSourcePairs(part);
+      for (const pair of pairs) {
+        const sourceUrl = unescapeSource(pair.sourceUrl);
+        const sourceName = normalizeSourceName(pair.sourceName, sourceUrl);
         if (sourceUrl.startsWith('--')) {
           respLines.push({ sourceName, hex: sourceUrl.substring(2) });
         } else if (sourceUrl.startsWith('http') || sourceUrl.startsWith('/')) {
@@ -136,6 +218,9 @@ function parseSourceLines(apiData: { data: { _m: string | any[]; tobeparsed: any
       }
     }
   };
+
+  collectStructuredSources(apiData?.data, respLines, seen);
+  collectStructuredSources(apiData?.tobeparsed, respLines, seen);
 
   // Check all blob locations
   if (apiData?.data?._m && apiData.data._m.length > 10) {
@@ -154,10 +239,10 @@ function parseSourceLines(apiData: { data: { _m: string | any[]; tobeparsed: any
     const cleaned = unescapeSource(raw);
     const parts = cleaned.replace(/[{}]/g, '\n').split('\n');
     for (const part of parts) {
-      const m = part.match(/"sourceUrl":"([^"]*)".*"sourceName":"([^"]*)"/);
-      if (m) {
-        let sourceUrl = m[1];
-        const sourceName = m[2];
+      const pairs = extractSourcePairs(part);
+      for (const pair of pairs) {
+        const sourceUrl = unescapeSource(pair.sourceUrl);
+        const sourceName = normalizeSourceName(pair.sourceName, sourceUrl);
         if (sourceUrl.startsWith('--')) {
           respLines.push({ sourceName, hex: sourceUrl.substring(2) });
         } else if (sourceUrl.startsWith('http') || sourceUrl.startsWith('/')) {
@@ -183,11 +268,9 @@ function b64urlToHex(b64url: any) {
 }
 
 async function getFilemoonLinks(providerPath: string) {
-  const allLinks = [] as Array<{
-      needsReferer: any; resolution: any; url: any; provider: any 
-}> & {
+  const allLinks: Array<{ resolution: any; url: any; provider: any; needsReferer?: boolean }> & {
     _subtitles?: Array<{ language: any; label: any; url: any }>;
-  };
+  } = [];
   const fetchUrl = providerPath.startsWith('http') ? providerPath : `https://${ALLANIME_BASE}${providerPath}`;
   try {
     const response = await axios.get(fetchUrl, {
@@ -215,9 +298,9 @@ async function getFilemoonLinks(providerPath: string) {
         const m1 = part.match(/"url":"([^"]*)".*"height":(\d+)/);
         const m2 = part.match(/"height":(\d+).*"url":"([^"]*)"/);
         if (m1) {
-          allLinks.push({ resolution: m1[2], url: m1[1].replace(/\\u0026/g, '&').replace(/\\u003D/g, '='), provider: 'Fm-mp4', needsReferer: false });
+          allLinks.push({ resolution: m1[2], url: m1[1].replace(/\\u0026/g, '&').replace(/\\u003D/g, '='), provider: 'Fm-mp4' });
         } else if (m2) {
-          allLinks.push({ resolution: m2[1], url: m2[2].replace(/\\u0026/g, '&').replace(/\\u003D/g, '='), provider: 'Fm-mp4', needsReferer: false });
+          allLinks.push({ resolution: m2[1], url: m2[2].replace(/\\u0026/g, '&').replace(/\\u003D/g, '='), provider: 'Fm-mp4' });
         }
       }
     }
@@ -247,16 +330,14 @@ async function getMp4UploadLinks(pageUrl: string) {
 
 async function getProviderLinks(providerPath: string, sourceName: any) {
   if (providerPath.includes('tools.fast4speed.rsvp')) {
-    return [{ resolution: 'Yt', url: providerPath, provider: sourceName, needsReferer: true }];
+    return [{ resolution: 'Yt', url: providerPath, provider: 'Yt-mp4', needsReferer: true }];
   }
   if (providerPath.includes('mp4upload.com')) {
     return getMp4UploadLinks(providerPath);
   }
 
   const fetchUrl = providerPath.startsWith('http') ? providerPath : `https://${ALLANIME_BASE}${providerPath}`;
-  const allLinks = [] as ({ resolution: any; url: any; provider: any; needsReferer?: boolean }[] & {
-    _subtitles?: { language: any; label: any; url: any }[];
-  });
+  const allLinks: any[] & { _subtitles?: any[] } = [];
 
   try {
     const response = await axios.get(fetchUrl, {
@@ -378,7 +459,7 @@ function normalizeMode(mode: string) {
 }
 
 function buildCandidateTitles(values: any[]) {
-  return [...new Set(values.filter(Boolean).map((v: string) => v.trim()).filter(Boolean))];
+  return [...new Set(values.filter(Boolean).map((v) => v.trim()).filter(Boolean))];
 }
 
 function formatShow(show: { _id: any; name: any; englishName: any; aniListId: any; malId: any; }) {
@@ -391,7 +472,7 @@ function formatShow(show: { _id: any; name: any; englishName: any; aniListId: an
   };
 }
 
-async function allanimeSearchByTitle(title: unknown, mode = 'sub') {
+async function allanimeSearchByTitle(title: any, mode = 'sub') {
   const response = await axios.post(
     ALLANIME_API,
     {
@@ -453,5 +534,15 @@ async function mapByMalId(malId: any, mode = 'sub') {
   throw new Error('No AllAnime mapping found for this MAL ID');
 }
 
-
-export { mapByAniListId, mapByMalId,decodeProviderId, normalizeMode, requestAllanimeEpisodeSources, parseSourceLines, getProviderLinks, getFilemoonLinks, getMp4UploadLinks };
+export {
+  mapByAniListId,
+  mapByMalId,
+  decodeProviderId,
+  normalizeMode,
+  requestAllanimeEpisodeSources,
+  getFilemoonLinks,
+  getMp4UploadLinks,
+  parseSourceLines,
+  getProviderLinks,
+  buildCandidateTitles,
+};
