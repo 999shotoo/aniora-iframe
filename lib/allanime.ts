@@ -12,12 +12,11 @@ const YOUTU_CHAN_REFERER = 'https://youtu-chan.com';
 const ALLANIME_EPISODE_QUERY_HASH = 'd405d0edd690624b66baba3068e0edc3ac90f1597d898a1ec8db4e5c43c00fec';
 
 
-// const ANILIST_HEADERS = {
-//   'Content-Type': 'application/json',
-//   Accept: 'application/json',
-//   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0) Gecko/20100101 Firefox/150.0',
-//   'Accept-Language': 'en-US,en;q=0.9',
-// };
+const ANILIST_HEADERS = {
+  'Content-Type': 'application/json',
+  Accept: 'application/json',
+  'User-Agent': 'Aniora/1.0 (+https://aniora.qzz.io/)',
+};
 
 const HTTP_HEADERS = {
   'Content-Type': 'application/json',
@@ -517,7 +516,7 @@ async function postAniListWithRetry(payload: { query: string; variables: { id: n
   for (let i = 0; i < attempts; i++) {
     try {
       return await axios.post(ANILIST_GRAPHQL_API, payload, {
-        // headers: ANILIST_HEADERS,
+        headers: ANILIST_HEADERS,
         timeout: 8000,
       });
     } catch (e) {
