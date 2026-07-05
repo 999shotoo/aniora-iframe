@@ -1,4 +1,4 @@
-import { requestAllanimeEpisodeSources } from "@/lib/allanime";
+import { parseSourceLines, requestAllanimeEpisodeSources } from "@/lib/allanime";
 
 
 export default async function Page({
@@ -11,7 +11,10 @@ export default async function Page({
     const { ep, mode } = await searchParams
 
     const apiData = await requestAllanimeEpisodeSources(id, mode, ep);
-    console.log("API Data:", apiData);
+    const respLines = parseSourceLines(apiData);
+
+
+    console.log("API Data:", respLines);
     return (
         <>
             <h1>hey {id}</h1>
