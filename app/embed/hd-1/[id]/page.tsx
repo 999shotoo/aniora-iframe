@@ -1,3 +1,4 @@
+import VideoPlayer from "@/components/allanime/videoplayer";
 import { decodeProviderId, getFilemoonLinks, getProviderLinks, mapByAniListId, parseSourceLines, requestAllanimeEpisodeSources } from "@/lib/allanime";
 
 function sourceNameKey(value: string) {
@@ -105,16 +106,7 @@ export default async function Page({
 
     return (
         <>
-            <h1>hey {id}</h1>
-            <p>Episode: {ep}</p>
-            <p>Mode: {mode}</p>
-            <ul>
-                {sources.map((source, index) => (
-                    <li key={index}>
-                        <strong>{source.provider}</strong> - {source.resolution} - <a href={source.url} target="_blank" rel="noopener noreferrer">Link</a> {source.needsReferer ? '(needs referer)' : ''}
-                    </li>
-                ))}
-            </ul>
+            <VideoPlayer videoSources={sources} />
         </>
     );
 }
