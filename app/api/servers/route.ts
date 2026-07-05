@@ -1,77 +1,49 @@
+import { mapByAniListId, mapByMalId, normalizeMode } from "@/lib/allanime";
 import { NextRequest, NextResponse } from "next/server";
-import { fetchRawEpisodes } from "@/lib/miruro/episodes";
 
-export const runtime = "edge";
-
-interface ServerEntry {
-  provider: string;
-  category: "sub" | "dub";
-  episodeId: string;
-  number: number;
-}
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const idParam = searchParams.get("id");
-  const epParam = searchParams.get("ep_id") ?? searchParams.get("ep");
-
-  if (!idParam || !epParam) {
-    return NextResponse.json({ error: "id and ep_id are required" }, { status: 400 });
-  }
-
-  const anilistId = Number(idParam);
-  const episodeNumber = Number(epParam);
-  if (Number.isNaN(anilistId) || Number.isNaN(episodeNumber)) {
-    return NextResponse.json({ error: "id and ep_id must be numbers" }, { status: 400 });
-  }
-
-  let data: Record<string, unknown>;
   try {
-    data = await fetchRawEpisodes(anilistId);
-  } catch (err) {
-    const message = (err as Error).message;
-    console.error(`[/api/servers] scrape failed for anilistId=${anilistId}:`, message);
-    return NextResponse.json(
-      { error: "Failed to scrape episodes from Miruro", detail: message },
-      { status: 502 }
-    );
-  }
+    const id = req.nextUrl.searchParams.get('id');
+    const ep_id = req.nextUrl.searchParams.get('ep_id');
+    const type = req.nextUrl.searchParams.get('type');
+    const mode = normalizeMode(req.nextUrl.searchParams.get('mode') || 'sub');
 
-  const providers = (data.providers ?? {}) as Record<string, unknown>;
-  const sub: ServerEntry[] = [];
-  const dub: ServerEntry[] = [];
+    if (type === 'anilist') return NextResponse.json({ success: true, ...(await mapByAniListId(id, mode)) });
+    if (type === 'mal') return NextResponse.json({ success: true, ...(await mapByMalId(id, mode)) });
 
-  for (const [providerName, providerData] of Object.entries<any>(providers)) {
-    let episodes = providerData?.episodes;
-    if (Array.isArray(episodes)) episodes = { sub: episodes };
-    if (!episodes || typeof episodes !== "object") continue;
-
-    for (const [category, list] of Object.entries<any>(episodes)) {
-      if (!Array.isArray(list)) continue;
-      const match = list.find((e: any) => Number(e?.number) === episodeNumber);
-      if (!match || typeof match.id !== "string") continue;
-
-      const entry: ServerEntry = {
-        provider: providerName,
-        category: category === "dub" ? "dub" : "sub",
-        episodeId: match.id,
-        number: match.number,
+    try {
+      const fetchid = await mapByAniListId(id, mode)
+      const animeall_id = fetchid?.data?.allanimeId;
+      const servers = {
+        sub: [
+        {
+          "server": "hd-1",
+          "url": `${process.env.SERVER_URL}/embed/hd-1/${animeall_id}?ep=${ep_id}&mode=sub`,
+          "default": true
+        },
+        {
+          "server": "hd-2",
+          "url": `${process.env.SERVER_URL}/embed/hd-2/${animeall_id}?ep=${ep_id}&mode=sub`,
+        },
+      ],
+      dub: [
+        {
+          "server": "hd-1",
+          "url": `${process.env.SERVER_URL}/embed/hd-1/${animeall_id}?ep=${ep_id}&mode=dub`,
+          "default": true
+        },
+        {
+          "server": "hd-2",
+          "url": `${process.env.SERVER_URL}/embed/hd-2/${animeall_id}?ep=${ep_id}&mode=dub`,
+        },
+      ]
       };
-      (entry.category === "dub" ? dub : sub).push(entry);
+      return NextResponse.json({ success: true, servers });
+    } catch {
+      return NextResponse.json({ success: true, ...(await mapByMalId(id, mode)) });
     }
+  } catch (error) {
+    return NextResponse.json({ success: false, error: error || 'Failed to map input ID to AllAnime ID' }, { status: 500 });
   }
-
-  if (sub.length === 0 && dub.length === 0) {
-    return NextResponse.json(
-      { error: `Episode ${episodeNumber} not found for anilistId ${anilistId}` },
-      { status: 404 }
-    );
-  }
-
-  return NextResponse.json({
-    anilistId,
-    episode: episodeNumber,
-    sub,
-    ...(dub.length > 0 ? { dub } : {}),
-  });
 }
