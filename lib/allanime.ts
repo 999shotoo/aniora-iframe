@@ -270,7 +270,7 @@ function b64urlToHex(b64url: any) {
 function buildProxyUrl(targetUrl: string, refOrigin: string) {
   const encodedUrl = encodeURIComponent(targetUrl);
   const encodedRef = encodeURIComponent(refOrigin);
-  return `https://v0-kwik-cx-referer.onrender.com/api/proxy?url=${encodedUrl}&ref=${encodedRef}&origin=${encodedRef}`;
+  return `https://v0-kwik-cx-referer.onrender.com/api/proxy?url=${encodedUrl}&ref=${encodedRef}&orgin=${encodedRef}`;
 }
 
 function isMp4UploadUrl(url: string) {

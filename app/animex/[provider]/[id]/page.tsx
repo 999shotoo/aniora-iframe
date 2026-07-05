@@ -16,7 +16,7 @@ export default async function AnimePage({ params, searchParams }: { params: { pr
     console.log('[ANIMEX] Fetching sources from:', response);
     return (
         <>
-            <MediaPlayer title="" src={`https://v0-kwik-cx-referer.onrender.com/api/proxy?url=${response.sources[0]?.url}&ref=${response.headers?.Referer}&origin=${response.headers?.Referer}`} autoplay muted loop>
+            <MediaPlayer title="" src={`https://m3u8-proxy-alpha-ashen.vercel.app/m3u8-proxy?url=${encodeURIComponent(response.sources[0]?.url)}&ref=${response.headers?.Referer}&origin=${response.headers?.Referer}`} autoplay muted loop>
                 <MediaProvider>
                     {response.tracks?.map((track: {
                         id: string;
