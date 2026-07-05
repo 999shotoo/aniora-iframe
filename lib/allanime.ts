@@ -452,4 +452,4 @@ async function mapByMalId(malId: any, mode = 'sub') {
 }
 
 
-export { mapByAniListId, mapByMalId, normalizeMode, requestAllanimeEpisodeSources, parseSourceLines, getProviderLinks, getFilemoonLinks, getMp4UploadLinks };
+export { mapByAniListId, mapByMalId,decodeProviderId, normalizeMode, requestAllanimeEpisodeSources, parseSourceLines, getProviderLinks, getFilemoonLinks, getMp4UploadLinks };
