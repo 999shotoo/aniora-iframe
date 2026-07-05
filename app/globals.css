@@ -1,0 +1,312 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+ 
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+ 
+/* ============================================================
+   LIGHT MODE
+   ============================================================ */
+:root {
+  --radius: 0.375rem;
+ 
+  --background:           #f4f2ed;
+  --foreground:           #1a1a18;       /* t1 */
+ 
+  --card:                 #efede7;
+  --card-foreground:      #1a1a18;
+ 
+  --popover:              #efede7;
+  --popover-foreground:   #1a1a18;
+ 
+  --primary:              #1a1a18;
+  --primary-foreground:   #f4f2ed;
+ 
+  --secondary:            #e8e5de;
+  --secondary-foreground: #3a3a36;       /* t3 equivalent */
+ 
+  --muted:                #e2dfd7;
+  --muted-foreground:     #6a6a66;       /* t3 — readable on light bg */
+ 
+  --accent:               #e2dfd7;
+  --accent-foreground:    #1a1a18;
+ 
+  --destructive:          #c0392b;
+ 
+  --border:               #d0cdc5;
+  --input:                #d0cdc5;
+  --ring:                 #1a1a18;
+ 
+  --chart-1: #2d6a4f;
+  --chart-2: #1d3557;
+  --chart-3: #e76f51;
+  --chart-4: #8d99ae;
+  --chart-5: #a8dadc;
+ 
+  --sidebar:                    #eceae4;
+  --sidebar-foreground:         #1a1a18;
+  --sidebar-primary:            #1a1a18;
+  --sidebar-primary-foreground: #f4f2ed;
+  --sidebar-accent:             #e2dfd7;
+  --sidebar-accent-foreground:  #1a1a18;
+  --sidebar-border:             #d0cdc5;
+  --sidebar-ring:               #1a1a18;
+}
+ 
+/* ============================================================
+   DARK MODE — terminal aesthetic
+   5-tier text scale:
+     t1 #f2f2f2  headings, logo, hero
+     t2 #b8b8b8  body copy, card text, descriptions
+     t3 #888888  nav links, section labels, secondary UI
+     t4 #555555  timestamps, handles, metadata
+     t5 #333333  structural only — cursors, decorative marks
+   ============================================================ */
+.dark {
+  --background:           #0c0c0c;
+  --foreground:           #f2f2f2;       /* t1 */
+ 
+  --card:                 #111111;
+  --card-foreground:      #b8b8b8;       /* t2 */
+ 
+  --popover:              #111111;
+  --popover-foreground:   #b8b8b8;
+ 
+  --primary:              #f2f2f2;       /* t1 */
+  --primary-foreground:   #0c0c0c;
+ 
+  --secondary:            #1a1a1a;
+  --secondary-foreground: #888888;       /* t3 */
+ 
+  --muted:                #181818;
+  --muted-foreground:     #888888;       /* t3 — the key fix, was #555 before */
+ 
+  --accent:               #1f1f1f;
+  --accent-foreground:    #b8b8b8;       /* t2 */
+ 
+  --destructive:          #e05252;
+ 
+  --border:               #242424;
+  --input:                #1a1a1a;
+  --ring:                 #888888;       /* t3 */
+ 
+  --chart-1: #52b788;
+  --chart-2: #74b3ce;
+  --chart-3: #e76f51;
+  --chart-4: #8d99ae;
+  --chart-5: #a8dadc;
+ 
+  --sidebar:                    #0f0f0f;
+  --sidebar-foreground:         #b8b8b8; /* t2 */
+  --sidebar-primary:            #f2f2f2; /* t1 */
+  --sidebar-primary-foreground: #0c0c0c;
+  --sidebar-accent:             #1a1a1a;
+  --sidebar-accent-foreground:  #b8b8b8; /* t2 */
+  --sidebar-border:             #242424;
+  --sidebar-ring:               #888888; /* t3 */
+}
+ 
+/* ============================================================
+   BASE
+   ============================================================ */
+* {
+  border-color: var(--border);
+  outline-color: var(--ring);
+}
+ 
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-mono), var(--font-geist-sans), 'Courier New', monospace;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+ 
+/* ============================================================
+   GRAIN TEXTURE
+   Double-layer noise — fine grain (160px) + coarse grain (320px)
+   mix-blend-mode: overlay gives depth without killing contrast
+   ============================================================ */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background-image:
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n1'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n1)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n2'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.4' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n2)'/%3E%3C/svg%3E");
+  background-repeat: repeat, repeat;
+  background-size: 160px 160px, 320px 320px;
+  opacity: 0.18;
+  mix-blend-mode: overlay;
+}
+ 
+:root body::before {
+  opacity: 0.10;
+  mix-blend-mode: multiply;
+}
+ 
+/* ============================================================
+   TYPOGRAPHY
+   ============================================================ */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-geist-mono), 'Courier New', monospace;
+  color: var(--foreground);           /* t1 in dark, #1a1a18 in light */
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+ 
+p, li, span {
+  /* inherit by default — shadcn components will pick up card-foreground (t2)
+     so paragraphs inside cards are automatically t2 without extra classes */
+}
+ 
+/* Muted text — anything using text-muted-foreground gets t3 (#888) in dark */
+/* This covers shadcn's Label, FormDescription, CardDescription, TableHead etc. */
+ 
+a {
+  color: inherit;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+ 
+a:hover {
+  color: var(--foreground);
+}
+ 
+/* ============================================================
+   SHADCN COMPONENT OVERRIDES
+   These ensure shadcn components respect the terminal palette
+   ============================================================ */
+ 
+/* Buttons — sharp corners, mono font */
+.btn, [class*="Button"], button[class*="inline-flex"] {
+  border-radius: 0 !important;
+  font-family: var(--font-geist-mono), monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+}
+ 
+/* Cards — dark surface, visible border */
+[class*="Card"] {
+  border-radius: 0;
+  border-color: var(--border);
+  background: var(--card);
+}
+ 
+/* Badges — no radius */
+[class*="Badge"] {
+  border-radius: 0;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+ 
+/* Input / Select — sharp, mono */
+input, select, textarea {
+  border-radius: 0 !important;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.8rem;
+  background: var(--input);
+  color: var(--foreground);
+  border-color: var(--border);
+}
+ 
+input::placeholder, textarea::placeholder {
+  color: #555555; /* t4 */
+}
+ 
+input:focus, textarea:focus, select:focus {
+  outline: 1px solid #888888; /* t3 */
+  border-color: #888888;
+}
+ 
+/* Separator */
+[class*="Separator"] {
+  background: var(--border);
+}
+ 
+/* Dialog / Sheet overlay */
+[class*="DialogOverlay"], [class*="SheetOverlay"] {
+  background: rgba(0,0,0,0.75);
+  backdrop-filter: blur(2px);
+}
+ 
+/* Dropdown / Popover content */
+[class*="DropdownMenuContent"],
+[class*="PopoverContent"],
+[class*="SelectContent"] {
+  border-radius: 0;
+  border-color: var(--border);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.75rem;
+}
+ 
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
+::-webkit-scrollbar       { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); }
+::-webkit-scrollbar-thumb:hover { background: #888888; /* t3 */ }
+ 
+/* ============================================================
+   SELECTION
+   ============================================================ */
+::selection {
+  background: var(--foreground);
+  color: var(--background);
+}
+ 
+/* ============================================================
+   FOCUS VISIBLE — keyboard nav
+   ============================================================ */
+:focus-visible {
+  outline: 1px solid #888888;
+  outline-offset: 2px;
+}
