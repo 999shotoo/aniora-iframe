@@ -16,7 +16,7 @@ export default async function AnimePage({ params, searchParams }: { params: { pr
     console.log('[ANIMEX] Fetching sources from:', response);
     return (
         <>
-            <MediaPlayer title="" src={`https://m3u8-proxy-h66i.onrender.com/m3u8-proxy?url=${encodeURIComponent(response.sources[0]?.url)}&ref=${response.headers?.Referer}&origin=${response.headers?.Referer}`} autoPlay >
+            <MediaPlayer className="h-screen w-screen" title="" src={`https://m3u8-proxy-h66i.onrender.com/m3u8-proxy?url=${encodeURIComponent(response.sources[0]?.url)}&ref=${response.headers?.Referer}&origin=${response.headers?.Referer}`} autoPlay >
                 <MediaProvider>
                     {response.tracks?.map((track: {
                         id: string;
@@ -36,7 +36,7 @@ export default async function AnimePage({ params, searchParams }: { params: { pr
                             src={thumbnail}
                             alt="Girl walks into campfire with gnomes surrounding her friend ready for their next meal!"
                         />
-                    };
+                    }
                 </MediaProvider>
                 <DefaultVideoLayout icons={defaultLayoutIcons} />
 
