@@ -59,20 +59,55 @@ const ANILIST_TITLE_QUERY = `query ($id: Int) {
 }`;
 
 // ─── Decryption ──────────────────────────────────────────────────────────────
+//
+// AllAnime switched episode-source responses from AES-256-CTR to AES-256-GCM
+// (an authenticated cipher), and now requires requests to carry a time-bound
+// "aaReq" token (also AES-256-GCM) in the GraphQL `extensions` object, or the
+// API responds with AA_CRYPTO_MISSING. See pystardust/ani-cli#1772.
 
-const ALLANIME_KEY = crypto.createHash('sha256').update('Xot36i3lK3:v1').digest();
+// Key derived to match the current AllAnime build (was previously
+// SHA256("Xot36i3lK3:v1"), which is now stale).
+const ALLANIME_KEY = Buffer.from(
+  '22196fa6afca95309fdabe9a3534b87cd2454e50efeabfcbdbdfd3de678b3982',
+  'hex'
+);
 
 function decrypt(blob: any) {
   try {
     const data = Buffer.from(String(blob), 'base64');
     if (data.length <= 29) return null;
-    const iv = Buffer.concat([data.slice(1, 13), Buffer.from('00000002', 'hex')]);
+    const iv = data.slice(1, 13); // 12-byte GCM IV
     const ciphertext = data.slice(13, data.length - 16);
-    const decipher = crypto.createDecipheriv('aes-256-ctr', ALLANIME_KEY, iv);
+    const tag = data.slice(data.length - 16); // last 16 bytes = GCM auth tag
+    const decipher = crypto.createDecipheriv('aes-256-gcm', ALLANIME_KEY, iv);
+    decipher.setAuthTag(tag);
     return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
   } catch (e) {
     return null;
   }
+}
+
+// Generates the aaReq token AllAnime's frontend attaches to episode-source
+// requests. Token is bound to a 5-minute time window (ts is floored to the
+// nearest 300000ms bucket), so don't cache/reuse it across that boundary.
+//
+// NOTE: `epoch: 4128` and `buildId: '9'` are hardcoded constants scraped from
+// AllAnime's live site JS (see discussion on ani-cli#1772/#1774). They've
+// been observed to stay stable even as other build values rotate, but there
+// is no guarantee — if source requests start failing again, these are the
+// first values to re-scrape and update.
+function generateAaReq(queryHash: string) {
+  const ts = Math.floor(Date.now() / 300000) * 300000;
+  const payload = JSON.stringify({ v: 1, ts, epoch: 4128, buildId: '9', qh: queryHash });
+  const iv = crypto
+    .createHash('sha256')
+    .update(`4128:9:${queryHash}:${ts}`)
+    .digest()
+    .subarray(0, 12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', ALLANIME_KEY, iv);
+  const ct = Buffer.concat([cipher.update(payload), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return Buffer.concat([Buffer.from([1]), iv, ct, tag]).toString('base64');
 }
 
 // ─── Provider ID decoder ──────────────────────────────────────────────────────
@@ -278,6 +313,8 @@ function isMp4UploadUrl(url: string) {
 }
 
 async function getFilemoonLinks(providerPath: string) {
+  // NOTE: Filemoon's payload endpoint is unaffected by the aaReq/GCM change —
+  // it still uses AES-256-CTR with per-request key parts, so this is left as-is.
   const allLinks: Array<{ resolution: any; url: any; provider: any; needsReferer?: boolean }> & {
     _subtitles?: Array<{ language: any; label: any; url: any }>;
   } = [];
@@ -417,54 +454,28 @@ async function requestAllanimeEpisodeSources(showId: any, mode: any, episode: an
   const variables = { showId, translationType: mode, episodeString: String(episode) };
   const extensions = {
     persistedQuery: { version: 1, sha256Hash: ALLANIME_EPISODE_QUERY_HASH },
+    aaReq: generateAaReq(ALLANIME_EPISODE_QUERY_HASH),
   };
 
-  // Try persisted-query GET first (bypasses captcha per ani-cli v4.14.0)
-  try {
-    const getResponse = await axios.get(ALLANIME_API, {
-      params: {
-        variables: JSON.stringify(variables),
-        extensions: JSON.stringify(extensions),
-      },
-      headers: EPISODE_HEADERS,
-      timeout: 8000,
-    });
+  // Persisted-query GET with aaReq is the only path that currently works.
+  // The old POST fallback (raw query string) also fails with AA_CRYPTO_MISSING
+  // now, so it has been removed rather than kept as dead code — see
+  // pystardust/ani-cli#1772.
+  const getResponse = await axios.get(ALLANIME_API, {
+    params: {
+      variables: JSON.stringify(variables),
+      extensions: JSON.stringify(extensions),
+    },
+    headers: EPISODE_HEADERS,
+    timeout: 8000,
+  });
 
-    const raw = JSON.stringify(getResponse.data);
-    if (raw.includes('tobeparsed') || raw.includes('"_m"') || raw.includes('sourceUrls')) {
-      console.log('[REQUEST] GET succeeded');
-      return getResponse.data;
-    }
-    // If we got data but none of the expected keys, log it so we can debug
-    console.log('[REQUEST] GET returned unexpected shape:', raw.substring(0, 200));
-  } catch (e) {
-    console.log('[REQUEST] GET failed:', e);
+  const raw = JSON.stringify(getResponse.data);
+  if (raw.includes('tobeparsed') || raw.includes('"_m"') || raw.includes('sourceUrls')) {
+    return getResponse.data;
   }
 
-  // POST fallback — use the same minimal headers, no extra Content-Type cruft
-  console.log('[REQUEST] Falling back to POST...');
-  const postResponse = await axios.post(
-    ALLANIME_API,
-    {
-      variables,
-      query: `query ($showId: String!, $translationType: VaildTranslationTypeEnumType!, $episodeString: String!) {
-        episode(showId: $showId translationType: $translationType episodeString: $episodeString) {
-          episodeString sourceUrls
-        }
-      }`,
-    },
-    {
-      headers: {
-        ...EPISODE_HEADERS,
-        'Content-Type': 'application/json', // required for POST body
-      },
-      timeout: 8000,
-    }
-  );
-
-  const raw = JSON.stringify(postResponse.data);
-  console.log('[REQUEST] POST response shape:', raw.substring(0, 200));
-  return postResponse.data;
+  throw new Error(`Unexpected response shape from AllAnime episode sources: ${raw.substring(0, 200)}`);
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
