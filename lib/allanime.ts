@@ -48,6 +48,17 @@ const ALLANIME_EPISODES_QUERY = `query ($showId: String!) {
   }
 }`;
 
+// Fallback POST query used when the persisted-query GET doesn't come back
+// with a usable payload. This mirrors ani-cli's episode_embed_gql exactly —
+// it queries `episode { sourceUrls }` directly rather than using the
+// persisted hash.
+const ALLANIME_EPISODE_SOURCES_QUERY = `query ($showId: String!, $translationType: VaildTranslationTypeEnumType!, $episodeString: String!) {
+  episode(showId: $showId, translationType: $translationType, episodeString: $episodeString) {
+    episodeString
+    sourceUrls
+  }
+}`;
+
 const ANILIST_TITLE_QUERY = `query ($id: Int) {
   Media(id: $id, type: ANIME) {
     title {
@@ -60,54 +71,36 @@ const ANILIST_TITLE_QUERY = `query ($id: Int) {
 
 // ─── Decryption ──────────────────────────────────────────────────────────────
 //
-// AllAnime switched episode-source responses from AES-256-CTR to AES-256-GCM
-// (an authenticated cipher), and now requires requests to carry a time-bound
-// "aaReq" token (also AES-256-GCM) in the GraphQL `extensions` object, or the
-// API responds with AA_CRYPTO_MISSING. See pystardust/ani-cli#1772.
-
-// Key derived to match the current AllAnime build (was previously
-// SHA256("Xot36i3lK3:v1"), which is now stale).
-const ALLANIME_KEY = Buffer.from(
-  '22196fa6afca95309fdabe9a3534b87cd2454e50efeabfcbdbdfd3de678b3982',
-  'hex'
-);
+// AllAnime's episode-source blobs ("tobeparsed" / "_m") are AES-256-CTR,
+// keyed off SHA256("Xot36i3lK3:v1"). This matches ani-cli 4.14.5's
+// process_response(): the blob is base64-decoded, bytes[1:13] are the IV,
+// and the counter is fixed to start at 2 (IV || 00 00 00 02), which is why
+// node needs a 16-byte IV built from the 12-byte value plus that suffix.
+// The trailing 16 bytes of the decoded blob are dropped before decrypting
+// (kept for parity with the reference script, even though CTR has no tag).
+//
+// NOTE: an earlier version of this file switched to AES-256-GCM with a new
+// key and a time-bound "aaReq" extensions token, based on the discussion in
+// pystardust/ani-cli#1772 (AA_CRYPTO_MISSING). That turned out to be wrong
+// for the currently-live API — the working reference script never sends
+// aaReq and still decrypts with plain CTR + the original key. If AllAnime
+// actually rolls out GCM/aaReq in the future, this is the first place to
+// revisit, but don't reintroduce it speculatively — verify against a
+// working script first, the way this fix did.
+const ALLANIME_KEY = crypto.createHash('sha256').update('Xot36i3lK3:v1').digest();
 
 function decrypt(blob: any) {
   try {
     const data = Buffer.from(String(blob), 'base64');
     if (data.length <= 29) return null;
-    const iv = data.slice(1, 13); // 12-byte GCM IV
-    const ciphertext = data.slice(13, data.length - 16);
-    const tag = data.slice(data.length - 16); // last 16 bytes = GCM auth tag
-    const decipher = crypto.createDecipheriv('aes-256-gcm', ALLANIME_KEY, iv);
-    decipher.setAuthTag(tag);
+    const iv = data.slice(1, 13); // 12-byte IV extracted from the blob
+    const ctrIv = Buffer.concat([iv, Buffer.from([0x00, 0x00, 0x00, 0x02])]); // counter starts at 2
+    const ciphertext = data.slice(13, data.length - 16); // drop trailing 16 bytes, as in the reference script
+    const decipher = crypto.createDecipheriv('aes-256-ctr', ALLANIME_KEY, ctrIv);
     return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
   } catch (e) {
     return null;
   }
-}
-
-// Generates the aaReq token AllAnime's frontend attaches to episode-source
-// requests. Token is bound to a 5-minute time window (ts is floored to the
-// nearest 300000ms bucket), so don't cache/reuse it across that boundary.
-//
-// NOTE: `epoch: 4128` and `buildId: '9'` are hardcoded constants scraped from
-// AllAnime's live site JS (see discussion on ani-cli#1772/#1774). They've
-// been observed to stay stable even as other build values rotate, but there
-// is no guarantee — if source requests start failing again, these are the
-// first values to re-scrape and update.
-function generateAaReq(queryHash: string) {
-  const ts = Math.floor(Date.now() / 300000) * 300000;
-  const payload = JSON.stringify({ v: 1, ts, epoch: 4128, buildId: '9', qh: queryHash });
-  const iv = crypto
-    .createHash('sha256')
-    .update(`4128:9:${queryHash}:${ts}`)
-    .digest()
-    .subarray(0, 12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', ALLANIME_KEY, iv);
-  const ct = Buffer.concat([cipher.update(payload), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return Buffer.concat([Buffer.from([1]), iv, ct, tag]).toString('base64');
 }
 
 // ─── Provider ID decoder ──────────────────────────────────────────────────────
@@ -313,8 +306,8 @@ function isMp4UploadUrl(url: string) {
 }
 
 async function getFilemoonLinks(providerPath: string) {
-  // NOTE: Filemoon's payload endpoint is unaffected by the aaReq/GCM change —
-  // it still uses AES-256-CTR with per-request key parts, so this is left as-is.
+  // Filemoon's payload endpoint uses AES-256-CTR with per-request key parts
+  // (unrelated to ALLANIME_KEY) — unaffected by the fix above, left as-is.
   const allLinks: Array<{ resolution: any; url: any; provider: any; needsReferer?: boolean }> & {
     _subtitles?: Array<{ language: any; label: any; url: any }>;
   } = [];
@@ -441,9 +434,6 @@ async function getProviderLinks(providerPath: string, sourceName: any) {
 
 // ─── Episode sources API request ──────────────────────────────────────────────
 
-// Minimal headers that match ani-cli / the working GitHub script exactly.
-// Extra headers (Accept-Encoding, DNT, Connection, Content-Type on GET) are
-// what cause the API to respond with NEED_CAPTCHA.
 const EPISODE_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0) Gecko/20100101 Firefox/150.0',
   Referer: YOUTU_CHAN_REFERER,
@@ -454,25 +444,45 @@ async function requestAllanimeEpisodeSources(showId: any, mode: any, episode: an
   const variables = { showId, translationType: mode, episodeString: String(episode) };
   const extensions = {
     persistedQuery: { version: 1, sha256Hash: ALLANIME_EPISODE_QUERY_HASH },
-    aaReq: generateAaReq(ALLANIME_EPISODE_QUERY_HASH),
   };
 
-  // Persisted-query GET with aaReq is the only path that currently works.
-  // The old POST fallback (raw query string) also fails with AA_CRYPTO_MISSING
-  // now, so it has been removed rather than kept as dead code — see
-  // pystardust/ani-cli#1772.
-  const getResponse = await axios.get(ALLANIME_API, {
-    params: {
-      variables: JSON.stringify(variables),
-      extensions: JSON.stringify(extensions),
-    },
-    headers: EPISODE_HEADERS,
-    timeout: 8000,
-  });
+  // Step 1: persisted-query GET (matches ani-cli's primary path). No aaReq —
+  // the live API doesn't currently require or check for one.
+  try {
+    const getResponse = await axios.get(ALLANIME_API, {
+      params: {
+        variables: JSON.stringify(variables),
+        extensions: JSON.stringify(extensions),
+      },
+      headers: EPISODE_HEADERS,
+      timeout: 8000,
+    });
 
-  const raw = JSON.stringify(getResponse.data);
+    const raw = JSON.stringify(getResponse.data);
+    if (raw.includes('tobeparsed') || raw.includes('"_m"') || raw.includes('sourceUrls')) {
+      return getResponse.data;
+    }
+  } catch (e) {
+    // fall through to the POST fallback below
+  }
+
+  // Step 2: plain POST with the full query text, exactly like ani-cli falls
+  // back when the persisted-query GET doesn't return a usable payload.
+  const postResponse = await axios.post(
+    ALLANIME_API,
+    {
+      query: ALLANIME_EPISODE_SOURCES_QUERY,
+      variables,
+    },
+    {
+      headers: { ...EPISODE_HEADERS, 'Content-Type': 'application/json' },
+      timeout: 8000,
+    }
+  );
+
+  const raw = JSON.stringify(postResponse.data);
   if (raw.includes('tobeparsed') || raw.includes('"_m"') || raw.includes('sourceUrls')) {
-    return getResponse.data;
+    return postResponse.data;
   }
 
   throw new Error(`Unexpected response shape from AllAnime episode sources: ${raw.substring(0, 200)}`);
