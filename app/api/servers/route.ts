@@ -42,32 +42,32 @@ export async function GET(req: NextRequest) {
     const servers = {
       sub: [
         {
-          "server": "hd-1",
-          "url": `${process.env.SERVER_URL}/embed/allanime/${id}?ep=${ep_id}&mode=sub`,
-          "default": true
+          "server": "megaplay",
+          "url": `https://megaplay.buzz/stream/ani/${id}/${ep_id}/sub`,
         },
         ...subProviders.map((provider: { id: string; url: string }) => ({
           server: provider.id,
           url: `${process.env.SERVER_URL}/animex/${provider.id}/${animeId}?ep=${ep_id}&mode=sub`,
         })),
         {
-          "server": "megaplay",
-          "url": `https://megaplay.buzz/stream/ani/${id}/${ep_id}/sub`,
+          "server": "hd-1",
+          "url": `${process.env.SERVER_URL}/embed/allanime/${id}?ep=${ep_id}&mode=sub`,
+          "default": true
         },
       ],
       dub: [
         {
-          "server": "hd-1",
-          "url": `${process.env.SERVER_URL}/embed/allanime/${id}?ep=${ep_id}&mode=dub`,
-          "default": true
+          "server": "megaplay",
+          "url": `https://megaplay.buzz/stream/ani/${id}/${ep_id}/dub`,
         },
         ...dubProviders.map((provider: { id: string; url: string }) => ({
           server: provider.id,
           url: `${process.env.SERVER_URL}/animex/${provider.id}/${animeId}?ep=${ep_id}&mode=dub`,
         })),
         {
-          "server": "megaplay",
-          "url": `https://megaplay.buzz/stream/ani/${id}/${ep_id}/dub`,
+          "server": "hd-1",
+          "url": `${process.env.SERVER_URL}/embed/allanime/${id}?ep=${ep_id}&mode=dub`,
+          "default": true
         },
       ]
     };
