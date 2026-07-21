@@ -44,6 +44,7 @@ export async function GET(req: NextRequest) {
         {
           "server": "megaplay",
           "url": `https://megaplay.buzz/stream/ani/${id}/${ep_id}/sub`,
+          "default": true
         },
         ...subProviders.map((provider: { id: string; url: string }) => ({
           server: provider.id,
@@ -52,13 +53,13 @@ export async function GET(req: NextRequest) {
         {
           "server": "hd-1",
           "url": `${process.env.SERVER_URL}/embed/allanime/${id}?ep=${ep_id}&mode=sub`,
-          "default": true
         },
       ],
       dub: [
         {
           "server": "megaplay",
           "url": `https://megaplay.buzz/stream/ani/${id}/${ep_id}/dub`,
+          "default": true
         },
         ...dubProviders.map((provider: { id: string; url: string }) => ({
           server: provider.id,
@@ -67,7 +68,6 @@ export async function GET(req: NextRequest) {
         {
           "server": "hd-1",
           "url": `${process.env.SERVER_URL}/embed/allanime/${id}?ep=${ep_id}&mode=dub`,
-          "default": true
         },
       ]
     };
